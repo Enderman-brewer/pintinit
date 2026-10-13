@@ -9,6 +9,7 @@ list: req: Do not start unit if other units have not started
 """
 
 services = [
-    # ["name", "desc", ["command", "here"], oneshot-game, ["requres", "unit"]]
-    ["basic-login-test", "Launch a basic shell", ["/sbin/agetty", "-o", "-p -- \\u", "--noclear", "tty1", "linux"], False, []]
+    # ["name", "desc", ["command", "here"], oneshot-game, ["requires", "unit"]]
+    ["basic-login-test@tty1", "Launch a basic shell", ["/sbin/agetty", "-o", "-p -- \\u", "--noclear", "tty1", "linux"], False, []],
+    ["basic-login-test@ttyS0", "Launch a serial console login", ["/sbin/agetty", "-o", "-p -- \\u", "--noclear", "115200", "ttyS0", "vt100"], False, []]
 ]

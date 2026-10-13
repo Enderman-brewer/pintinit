@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 from typing import TypedDict
+import traceback
 
 service_list = {}
 failed_list: list = []
@@ -106,6 +107,21 @@ class ServiceInfo(TypedDict):
     pid: int
     crashed: bool
 
+def eshell():
+    try:
+        print(f"[{time_since_start()}]{Colour.RED} Starting emergency shell...{Colour.RESET}")
+        while True:
+            subprocess.run(["/bin/login"])
+    except FileNotFoundError as e:
+        print(f"[{time_since_start()}] Emergency shell failed: {e}")
+        print("WHAT THE FUCK! Ok, you are not on a real machine, fuck you, hey kernel, crash.")
+        print("{Colour.YELLOW}Kernel:{Colour.RED} Ok{Colour.RESET}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"[{time_since_start()}] Emergency shell failed: {e}")
+        print(f"Stupid unhandled exception, hey, now it's handled... I wonder...{Colour.GREEN} Can I make the kernel crash green?")
+        sys.exit(1)
+
 def get_service(service_name: str, allow_graceful_exit: bool = False) -> ServiceInfo:
     process = service_list[service_name]
     status = process.poll()
@@ -154,6 +170,30 @@ def mount(command):
     except subprocess.CalledProcessError as error:
         print(f"[{time_since_start()}] Mount failed with code {error.returncode}: {error.stderr}")
 
+def boot():
+    print(f"[{time_since_start()}] Starting services...")
+    # Load services from /etc/pintinit/config.py
+    config_path = "/etc/pintinit/config.py"
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("config", config_path)
+        config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(config)
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[{time_since_start()}] Failed to load configuration from {config_path}")
+        eshell()
+    for i in config.services:
+        print(f"[{time_since_start()}] Starting service {i[0]}...")
+        try:
+            start_service(i[0], i[2], i[3])
+        except Exception as e:
+            traceback.print_exc()
+            print(f"[{time_since_start()}] Failed to start service {i[0]}: {e}")
+            eshell()
+            
+
+
 try:
     os_info = platform.freedesktop_os_release()
     pretty_name = os_info.get("PRETTY_NAME", "Linux")
@@ -165,6 +205,9 @@ print(f"[{time_since_start()}] The system would like permission to get permissio
 print(f"Would you like to start the system? {Colour.RED}[y/N]{Colour.RESET}")
 time.sleep(0.2)
 print(f"[{time_since_start()}] Fuck it, I know the answer...")
+
+boot()
+
 while True:
     time.sleep(3600)
     print(f"[{time_since_start()}] Slept for 1 hour, sleeping again.")
