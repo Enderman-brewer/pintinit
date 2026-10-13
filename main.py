@@ -1,9 +1,13 @@
+import time
+START_TIME = time.perf_counter()
 import subprocess
 import os
 import sys
-import time
 import platform
-START_TIME = time.perf_counter()
+from typing import TypedDict
+
+service_list = {}
+failed_list: list = []
 
 def time_since_start():
     timesince = time.perf_counter() - START_TIME
@@ -93,6 +97,47 @@ if current_pid != 1 or parent_pid != 0:
     print("Must be started as PID 1.")
     sys.exit(1)
 
+class InvalidServiceError(Exception):
+    pass
+
+class ServiceInfo(TypedDict):
+    name: str
+    status: int | None
+    pid: int
+    crashed: bool
+
+def get_service(service_name: str, allow_graceful_exit: bool = False) -> ServiceInfo:
+    process = service_list[service_name]
+    status = process.poll()
+    pid = process.pid
+    if allow_graceful_exit and status == 0:
+        crashed = False
+    elif status is None:
+        crashed = False
+    else:
+        crashed = True
+
+    return {"name": service_name, "status": status, "pid": pid, "crashed": crashed}
+    
+
+def start_service(service_name: str, command: list[str], oneshot_game: bool = False):
+    global service_list, failed_list
+    if not service_name or not command:
+        raise InvalidServiceError("Incorrect usage")
+    if service_name in service_list:
+        raise InvalidServiceError("Service already exists")
+    process = subprocess.Popen(command)
+    service_list[service_name] = process
+    time.sleep(0.1)
+    status = get_service(service_name)
+    if status["crashed"]:
+        if not (service_name in failed_list):
+            failed_list = failed_list + [service_name]
+    else:
+        if service_name in failed_list:
+            failed_list.remove(service_name)
+    
+        
 
 def mount(command):
     mount_point = command[-1]
@@ -116,7 +161,10 @@ except FileNotFoundError:
     pretty_name = "Linux (Unknown)"
 
 print(f"[{time_since_start()}] Welcome to {Colour.BOLD}{Colour.CYAN}{pretty_name}{Colour.RESET}!")
-print(f"{Colour.GREEN}Boot successful! Entering test loop.{Colour.RESET}")
+print(f"[{time_since_start()}] The system would like permission to get permission to start")
+print(f"Would you like to start the system? {Colour.RED}[y/N]{Colour.RESET}")
+time.sleep(0.2)
+print(f"[{time_since_start()}] Fuck it, I know the answer...")
 while True:
     time.sleep(3600)
     print(f"[{time_since_start()}] Slept for 1 hour, sleeping again.")
