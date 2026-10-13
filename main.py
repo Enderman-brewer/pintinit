@@ -8,7 +8,36 @@ from typing import TypedDict
 import traceback
 
 service_list = {}
-failed_list: list = []
+failed_list = {}
+booted = False
+
+import os
+
+LOG_FILE = "/var/log/pintinit.log"
+LOG_TTY = "/dev/tty8"
+
+_log_fds = []  # open once, reused on every call
+
+def _open_log_targets():
+    for path, flags in (
+        (LOG_TTY, os.O_WRONLY | os.O_NOCTTY),              # don't make tty8 our controlling terminal
+        (LOG_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND),
+    ):
+        try:
+            _log_fds.append(os.open(path, flags, 0o644))
+        except OSError:
+            pass  # target missing or unwritable: skip it, keep booting
+
+def log(*values, sep=" ", end="\n"):
+    if not _log_fds:
+        _open_log_targets()
+    text = sep.join(str(v) for v in values) + end
+    data = text.encode()
+    for fd in _log_fds:
+        try:
+            os.write(fd, data)
+        except OSError:
+            pass  # one bad target shouldn't stop the others
 
 def time_since_start():
     timesince = time.perf_counter() - START_TIME
@@ -90,10 +119,11 @@ current_pid = os.getpid()
 
 # Get the parent process ID (PPID)
 parent_pid = os.getppid()
-print("=" * 10)
-print(f"[{time_since_start()}] Current PID: {current_pid}")
-print(f"[{time_since_start()}] Parent PID: {parent_pid}")
-print("=" * 10)
+msg = ("=" * 10) + "\n" + \
+f"[{time_since_start()}] Current PID: {current_pid}" + "\n" + \
+f"[{time_since_start()}] Parent PID: {parent_pid}" + "\n" + \
+("=" * 10)
+print(msg)
 if current_pid != 1 or parent_pid != 0:
     print("Must be started as PID 1.")
     sys.exit(1)
@@ -105,6 +135,7 @@ class ServiceInfo(TypedDict):
     name: str
     status: int | None
     pid: int
+    oneshot_game: bool
     crashed: bool
 
 def eshell():
@@ -115,7 +146,7 @@ def eshell():
     except FileNotFoundError as e:
         print(f"[{time_since_start()}] Emergency shell failed: {e}")
         print("WHAT THE FUCK! Ok, you are not on a real machine, fuck you, hey kernel, crash.")
-        print("{Colour.YELLOW}Kernel:{Colour.RED} Ok{Colour.RESET}")
+        print(f"{Colour.YELLOW}Kernel:{Colour.RED} Ok{Colour.RESET}")
         sys.exit(1)
     except Exception as e:
         print(f"[{time_since_start()}] Emergency shell failed: {e}")
@@ -123,7 +154,7 @@ def eshell():
         sys.exit(1)
 
 def get_service(service_name: str, allow_graceful_exit: bool = False) -> ServiceInfo:
-    process = service_list[service_name]
+    process = service_list[service_name][0]
     status = process.poll()
     pid = process.pid
     if allow_graceful_exit and status == 0:
@@ -133,31 +164,64 @@ def get_service(service_name: str, allow_graceful_exit: bool = False) -> Service
     else:
         crashed = True
 
-    return {"name": service_name, "status": status, "pid": pid, "crashed": crashed}
+    return {"name": service_name, "status": status, "pid": pid, "oneshot_game": allow_graceful_exit, "crashed": crashed}
     
 
 def start_service(service_name: str, command: list[str], oneshot_game: bool = False):
     global service_list, failed_list
     if not service_name or not command:
-        raise InvalidServiceError("Incorrect usage")
-    if service_name in service_list:
-        raise InvalidServiceError("Service already exists")
+        raise InvalidServiceError("Incorrect usage :(")
+    if (service_name in service_list) and not service_name in failed_list:
+        raise InvalidServiceError("Service already running correctly owo")
     process = subprocess.Popen(command)
-    service_list[service_name] = process
+    service_list[service_name] = [process, oneshot_game, command]
     time.sleep(0.1)
-    status = get_service(service_name)
+    status = get_service(service_name, allow_graceful_exit=oneshot_game)
     if status["crashed"]:
         if not (service_name in failed_list):
-            failed_list = failed_list + [service_name]
+            failed_list[service_name] = [process, 1]
+        else:
+            _, oldcrashes = failed_list[service_name]
+            failed_list[service_name] = [process, oldcrashes + 1]
+        msg = f"[{time_since_start()}] {Colour.RED}Failed to start {service_name}"
+        if not booted:
+            print(msg)
+        else:
+            log(msg)
     else:
+        msg = f"[{time_since_start()}] {Colour.GREEN}Started {service_name}{Colour.RESET}"
+        if not booted:
+            print(msg)
+        else:
+            log(msg)
         if service_name in failed_list:
-            failed_list.remove(service_name)
+            failed_list.pop(service_name, None)
+    
+def stop_service(service):
+    global service_list
+    target_for_kill = service_list[service][0]
+    target_for_kill.terminate()
+    timer = 20
+    while timer:
+        if target_for_kill.poll() is None:
+            timer -= 1
+            time.sleep(1)
+        else:
+            timer = 0
+    if target_for_kill.poll() is None:
+        target_for_kill.kill()
+    service_list.pop(service)
+
+def restart_service(service):
+    _, oneshot, command = service_list[service]
+    stop_service(service)
+    start_service(service_name=service, command=command, oneshot_game=oneshot)
     
         
 
 def mount(command):
     mount_point = command[-1]
-    print(f"Mounting: {mount_point}")
+    print(f"[{time_since_start()}] Mounting: {mount_point}")
 
     try:
         subprocess.run(
@@ -184,7 +248,7 @@ def boot():
         print(f"[{time_since_start()}] Failed to load configuration from {config_path}")
         eshell()
     for i in config.services:
-        print(f"[{time_since_start()}] Starting service {i[0]}...")
+        print(f"[{time_since_start()}] {Colour.CYAN}Starting service {i[0]}...{Colour.RESET}")
         try:
             start_service(i[0], i[2], i[3])
         except Exception as e:
@@ -207,7 +271,12 @@ time.sleep(0.2)
 print(f"[{time_since_start()}] Fuck it, I know the answer...")
 
 boot()
+booted = True
 
 while True:
-    time.sleep(3600)
-    print(f"[{time_since_start()}] Slept for 1 hour, sleeping again.")
+    service_list_temp = dict(service_list)
+    for i in service_list_temp:
+        service_poll = get_service(i)
+        if service_poll["crashed"]:
+            restart_service(service_poll["name"])
+    time.sleep(0.1)
