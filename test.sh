@@ -8,7 +8,13 @@ DIST="$PWD/build/main.dist"
 
 rm -rf "$ROOT"
 mkdir -p "$ROOT"/{bin,dev,proc,sys,mnt,run,tmp,usr/lib,lib64,opt/pintinit}
-
+mkdir -p "$ROOT/etc"
+cat > "$ROOT/etc/os-release" <<'EOF'
+NAME="Pintinit"
+PRETTY_NAME="Pintinit 0.1 (Fake)"
+ID=pintinit
+VERSION_ID="0.1"
+EOF
 # Copy Nuitka distribution
 cp -a "$DIST/." "$ROOT/opt/pintinit/"
 
