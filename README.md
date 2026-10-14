@@ -180,8 +180,7 @@ Pintinit currently uses a straightforward single-process control loop rather tha
 
 Pintinit is under active development. Current limitations include:
 
-- **Service restart tracking:** the failed-service data structure is inconsistent across some code paths, which can cause errors during repeated failures.
-- **Restart policy:** there is no reliable restart backoff or complete crash-limit enforcement.
+- **Restart policy:** there is no restart backoff. A service is refused after four failed starts, and that count is never reset after a successful start.
 - **Dependencies:** service requirement lists are defined but not processed.
 - **Command coverage:** only `shutdown` is handled; other management commands remain to be implemented.
 - **Command responses:** the client cannot currently verify that Pintinit acted on a request.
