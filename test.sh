@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 
 ROOT="$PWD/fakefs"
 DIST="$PWD/build/main.dist"
-DIST_CTL="$PWD/build_ctl/mainctl.dist/"
+DIST_CTL="$PWD/build_ctl/mainctl.dist"
 IMAGE="$PWD/build/pintinit-initramfs.img"
 
 # Clean and prepare initramfs

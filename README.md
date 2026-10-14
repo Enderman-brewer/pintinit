@@ -57,7 +57,7 @@ Some of these features are incomplete. In particular, the command interface curr
 
 ### ctl commands
 - [x] Shutdown
-- [x] Reboot
+- [ ] Reboot
 - [ ] Hibernate
 - [ ] Start service
 - [ ] Restart service
