@@ -9,8 +9,8 @@ def main():
 
     # Ensure the user provided at least one argument
     if len(sys.argv) < 2:
-        print("Usage: pintinitctl <command> [args...]")
-        print("Example: pintinitctl start nginx")
+        print("Usage: mainctl <command> [args...]")
+        print("Example: mainctl start nginx")
         sys.exit(1)
 
     # Capture all arguments passed to the script (excluding the script name itself)
