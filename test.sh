@@ -1,11 +1,11 @@
-
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 ROOT="$PWD/fakefs"
 DIST="$PWD/build/main.dist"
+DIST_CTL="$PWD/build_ctl/mainctl.dist/"
 IMAGE="$PWD/build/pintinit-initramfs.img"
 
 # Clean and prepare initramfs
@@ -62,6 +62,7 @@ if [[ ! -x "$DIST/main.bin" ]]; then
 fi
 
 cp -a "$DIST/." "$ROOT/opt/pintinit/"
+cp -a $DIST_CTL/. $ROOT/sbin/
 
 # Install BusyBox
 BUSYBOX="$(command -v busybox)"
@@ -234,25 +235,23 @@ fi
 
 # PAM modules may be loaded using dlopen(), so
 # readelf alone will not discover them.
-if [[ -d /usr/lib/security ]]; then
-    mkdir -p "$ROOT/usr/lib/security"
+# Copy PAM modules, preserving their directory structure
+for directory in /usr/lib/security /usr/lib/*/security; do
+    [[ -d "$directory" ]] || continue
 
     while IFS= read -r -d '' module; do
-        cp -L "$module" \
-            "$ROOT/usr/lib/security/$(basename "$module")"
+        copy_file "$module"
         copy_deps "$module"
     done < <(
-        find /usr/lib/security \
-            -maxdepth 1 \
-            -type f -name '*.so' -print0
+        find "$directory" -maxdepth 1 -name '*.so' -print0
     )
-fi
+done
 
 cat > "$ROOT/etc/pam.d/login" <<'EOF'
-auth       sufficient   pam_permit.so
-account    sufficient   pam_permit.so
-password   sufficient   pam_permit.so
-session    sufficient   pam_permit.so
+auth       required     pam_permit.so
+account    required     pam_permit.so
+password   required     pam_permit.so
+session    required     pam_permit.so
 EOF
 
 # Copy the PintInit configuration
@@ -315,7 +314,9 @@ exec qemu-system-x86_64 \
     -m 512M \
     -kernel /boot/vmlinuz-linux \
     -initrd "$IMAGE" \
-    -append "console=ttyS0 rdinit=/init loglevel=4" \
-    -nographic \
+    -append "console=tty1 console=ttyS0 rdinit=/init loglevel=4" \
+    -display gtk \
+    -vga std \
+    -serial mon:stdio \
     -cpu max \
     -no-reboot
