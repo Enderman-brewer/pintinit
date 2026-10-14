@@ -17,6 +17,7 @@ venv/bin/python3 -m nuitka \
     --mode=standalone \
     --static-libpython=yes \
     --output-dir=build_ctl \
+    --output-filename=pintinitctl \
     mainctl.py
 
 
