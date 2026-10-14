@@ -6,12 +6,76 @@ import sys
 import platform
 from typing import TypedDict
 import traceback
+import builtins
+import json
+import socket
+import ctypes
 
+libc = ctypes.CDLL(None)
 service_list = {}
 failed_list = {}
 booted = False
 
-import os
+# Linux reboot magic constants
+_MAGIC1 = 0xfee1dead
+_MAGIC2 = 0x28121969
+
+# Action commands
+_CMD_RESTART = 0x01234567
+_CMD_POWER_OFF = 0x4321fedc
+
+builtinprint = builtins.print
+
+
+
+SOCKET_PATH = "/run/pintinit.sock"
+
+def setup_command_socket():
+    os.makedirs("/run", exist_ok=True)
+
+    try:
+        os.unlink(SOCKET_PATH)
+    except FileNotFoundError:
+        pass
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(SOCKET_PATH)
+    os.chmod(SOCKET_PATH, 0o600)
+    server.setblocking(False)
+    return server
+
+def get_commands(server) -> list[list[str]]:
+    commands = []
+
+    while True:
+        try:
+            data = server.recv(65535)
+        except BlockingIOError:
+            break
+
+        try:
+            command = json.loads(data)
+            if isinstance(command, list) and all(isinstance(x, str) for x in command):
+                commands.append(command)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+
+    return commands
+
+
+def print(*args, sep=" ", end="\n", flush=False):
+    builtinprint(*args, sep=sep, end=end, flush=flush)
+
+    try:
+        with open("/dev/tty1", "w") as tty:
+            builtinprint(*args, sep=sep, end=end, file=tty, flush=flush)
+    except OSError:
+        pass
+    try:
+        with open("/dev/tty8", "w") as tty:
+            builtinprint(*args, sep=sep, end=end, file=tty, flush=flush)
+    except OSError:
+        pass
 
 LOG_FILE = "/var/log/pintinit.log"
 LOG_TTY = "/dev/tty8"
@@ -128,6 +192,10 @@ if current_pid != 1 or parent_pid != 0:
     print("Must be started as PID 1.")
     sys.exit(1)
 
+print(f"[{time_since_start()}] Kernel time is: {time.clock_gettime(time.CLOCK_BOOTTIME)}")
+print(f"Offset: {float(time_since_start()) - float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
+
+
 class InvalidServiceError(Exception):
     pass
 
@@ -173,15 +241,22 @@ def start_service(service_name: str, command: list[str], oneshot_game: bool = Fa
         raise InvalidServiceError("Incorrect usage :(")
     if (service_name in service_list) and not service_name in failed_list:
         raise InvalidServiceError("Service already running correctly owo")
+
+    
+    if service_name in failed_list:
+        _, _, crashednum = failed_list[service_name]
+        if crashednum > 3:
+            msg = f"[{time_since_start()}] Service {service_name} repeatly crashed, refusing to start..."
+            return
     process = subprocess.Popen(command)
     service_list[service_name] = [process, oneshot_game, command]
-    time.sleep(0.1)
+    time.sleep(0.5)
     status = get_service(service_name, allow_graceful_exit=oneshot_game)
     if status["crashed"]:
         if not (service_name in failed_list):
-            failed_list[service_name] = [process, 1]
+            failed_list[service_name] = [process, 1, status["crashed"]]
         else:
-            _, oldcrashes = failed_list[service_name]
+            _, oldcrashes, _ = failed_list[service_name]
             failed_list[service_name] = [process, oldcrashes + 1]
         msg = f"[{time_since_start()}] {Colour.RED}Failed to start {service_name}"
         if not booted:
@@ -194,8 +269,6 @@ def start_service(service_name: str, command: list[str], oneshot_game: bool = Fa
             print(msg)
         else:
             log(msg)
-        if service_name in failed_list:
-            failed_list.pop(service_name, None)
     
 def stop_service(service):
     global service_list
@@ -234,6 +307,31 @@ def mount(command):
     except subprocess.CalledProcessError as error:
         print(f"[{time_since_start()}] Mount failed with code {error.returncode}: {error.stderr}")
 
+def stopping_all():
+    for i in dict(service_list):
+        print(f"[{time_since_start()}] Stopping {i}")
+        stop_service(i)
+
+def handle_command(command: list):
+    try:
+        _ = command[0]
+    except:
+        return
+    if command[0] == "shutdown":
+        print("The system will now shut down.")
+        print(f"[{time_since_start()}] {Colour.RED}Preparing to shutdown{Colour.RESET}")
+        stopping_all()
+        print(f"[{time_since_start()}] All services have been shut down")
+        print(f"[{time_since_start()}] {Colour.CYAN}libc.sync(){Colour.RESET}")
+        print("I have enjoyed running, goodnight.")
+        libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_POWER_OFF, 0)
+
+
+
+        
+
+
+
 def boot():
     print(f"[{time_since_start()}] Starting services...")
     # Load services from /etc/pintinit/config.py
@@ -271,6 +369,7 @@ time.sleep(0.2)
 print(f"[{time_since_start()}] Fuck it, I know the answer...")
 
 boot()
+server = setup_command_socket()
 booted = True
 
 while True:
@@ -279,4 +378,6 @@ while True:
         service_poll = get_service(i)
         if service_poll["crashed"]:
             restart_service(service_poll["name"])
-    time.sleep(0.1)
+    for command in get_commands(server):
+        handle_command(command)
+    time.sleep(0.01)
