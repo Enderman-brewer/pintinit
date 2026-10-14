@@ -243,21 +243,20 @@ def start_service(service_name: str, command: list[str], oneshot_game: bool = Fa
         raise InvalidServiceError("Service already running correctly owo")
 
     
-    if service_name in failed_list:
-        _, _, crashednum = failed_list[service_name]
-        if crashednum > 3:
-            msg = f"[{time_since_start()}] Service {service_name} repeatly crashed, refusing to start..."
-            return
+    if service_name in failed_list and failed_list[service_name] > 3:
+        msg = f"[{time_since_start()}] Service {service_name} repeatedly crashed, refusing to start..."
+        if not booted:
+            print(msg)
+        else:
+            log(msg)
+        return
     process = subprocess.Popen(command)
     service_list[service_name] = [process, oneshot_game, command]
     time.sleep(0.5)
     status = get_service(service_name, allow_graceful_exit=oneshot_game)
     if status["crashed"]:
-        if not (service_name in failed_list):
-            failed_list[service_name] = [process, 1, status["crashed"]]
-        else:
-            _, oldcrashes, _ = failed_list[service_name]
-            failed_list[service_name] = [process, oldcrashes + 1]
+        # failed_list maps service name -> number of failed starts
+        failed_list[service_name] = failed_list.get(service_name, 0) + 1
         msg = f"[{time_since_start()}] {Colour.RED}Failed to start {service_name}"
         if not booted:
             print(msg)
