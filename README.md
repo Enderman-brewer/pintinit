@@ -44,7 +44,7 @@ This is a real experiment with real processes, not a simulation of an init syste
 Some of these features are incomplete. In particular, the command interface currently implements `shutdown`, not a full service-management command set.
 ## TODO
 
-[ ] Test
+- [ ] Test
 
 ## Requirements
 
