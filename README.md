@@ -44,7 +44,24 @@ This is a real experiment with real processes, not a simulation of an init syste
 Some of these features are incomplete. In particular, the command interface currently implements `shutdown`, not a full service-management command set.
 ## TODO
 
-- [ ] Test
+- [x] Make bootable
+- [x] Add main loop
+- [x] Not crash
+- [x] Manage services
+- [x] Make ctl command
+- [ ] Finish ctl
+- [x] Reap old processes
+- [x] Suck
+- [x] Technically be usable
+- [x] Add more management
+
+### ctl commands
+- [x] Shutdown
+- [x] Reboot
+- [ ] Hibernate
+- [ ] Start service
+- [ ] Restart service
+- [ ] Stop service
 
 ## Requirements
 
