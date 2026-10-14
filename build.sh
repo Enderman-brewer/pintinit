@@ -49,3 +49,4 @@ exec /opt/pintinit/main.bin
 EOF
 
 chmod +x "final_dist/sbin/init"
+chmod +x "final_dist/sbin/pintinitctl"

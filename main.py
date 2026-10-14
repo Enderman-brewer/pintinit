@@ -357,10 +357,20 @@ def handle_command(command: list):
         print("I have enjoyed running, goodnight.")
         print(f"[{time_since_start()}] Kernel time: {float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
         libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_POWER_OFF, 0)
+    elif command[0] == "reboot":
+        print("The system will now come back another time.")
+        print(f"[{time_since_start()}] {Colour.RED}Preparing to reboot{Colour.RESET}")
+        stopping_all()
+        print(f"[{time_since_start()}] All services have been shut down")
+        print(f"[{time_since_start()}] {Colour.CYAN}libc.sync(){Colour.RESET}")
+        libc.sync()
+        print('Fuck death, I will jump in front of a van and survive owo')
+        print(f"[{time_since_start()}] Kernel time: {float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
+        libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_RESTART, 0)
 
 
-
-        
+class HostNameError(Exception):
+    pass 
 
 
 
@@ -377,6 +387,30 @@ def boot():
         traceback.print_exc()
         print(f"[{time_since_start()}] Failed to load configuration from {config_path}")
         eshell()
+    print(f"[{time_since_start()}] {Colour.CYAN}Setting hostname{Colour.RESET}")
+    hostsrc = "None"
+    try:
+        hostname = config.hostname
+        hostsrc = "config.py"
+        if (hostname is None) or (hostname == ""):
+            raise HostNameError
+    except (HostNameError, AttributeError):
+        try:
+            with open("/etc/hostname", encoding="utf-8") as f:
+                hostname = f.readline().strip() or "localhost"
+                hostsrc = "/etc/hostname"
+        except FileNotFoundError:
+            hostname = "localhost"
+            hostsrc = "Compiled backup"
+    libc.sethostname.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+    libc.sethostname.restype = ctypes.c_int
+    encoded = hostname.encode("utf-8")
+    if libc.sethostname(encoded, len(encoded)) != 0:
+        error = ctypes.get_errno()
+        print(f"[{time_since_start()}] {Colour.YELLOW}{error}: Failed to set hostname, continuing to eat you...{Colour.RESET}")
+    else:
+        print(f"[{time_since_start()}] {Colour.GREEN}Set hostname to: {hostname}{Colour.RESET}")
+        print(f"[{time_since_start()}] Hostname source: {hostsrc}")
     for i in config.services:
         print(f"[{time_since_start()}] {Colour.CYAN}Starting service {i[0]}...{Colour.RESET}")
         try:

@@ -62,7 +62,9 @@ if [[ ! -x "$DIST/main.bin" ]]; then
 fi
 
 cp -a "$DIST/." "$ROOT/opt/pintinit/"
-cp -a $DIST_CTL/. $ROOT/sbin/
+cp -a "$DIST_CTL/." "$ROOT/sbin/"
+
+chmod +x "$ROOT/sbin/pintinitctl"
 
 # Install BusyBox
 BUSYBOX="$(command -v busybox)"
@@ -212,6 +214,8 @@ shadow: files
 hosts: files dns
 EOF
 
+echo "meow" > "$ROOT/etc/hostname"
+
 # Include common dynamically loaded NSS libraries
 for lib in libnss_files.so.2 libnss_dns.so.2; do
     path="$(find_library "$lib")"
@@ -317,5 +321,4 @@ exec qemu-system-x86_64 \
     -append "console=tty1 console=ttyS0 rdinit=/init loglevel=4" \
     -nographic \
     -serial mon:stdio \
-    -cpu max \
-    -no-reboot
+    -cpu max
