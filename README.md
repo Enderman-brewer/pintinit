@@ -42,6 +42,9 @@ This is a real experiment with real processes, not a simulation of an init syste
 - **QEMU test environment:** the repository contains scripts for building a small initramfs and booting it in a virtual machine.
 
 Some of these features are incomplete. In particular, the command interface currently implements `shutdown`, not a full service-management command set.
+## TODO
+
+[ ] Test
 
 ## Requirements
 
