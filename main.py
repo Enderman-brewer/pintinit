@@ -193,7 +193,7 @@ if current_pid != 1 or parent_pid != 0:
     sys.exit(1)
 
 print(f"[{time_since_start()}] Kernel time is: {time.clock_gettime(time.CLOCK_BOOTTIME)}")
-print(f"Offset: {float(time_since_start()) - float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
+print(f"Offset: {float(time.clock_gettime(time.CLOCK_BOOTTIME)) - float(time_since_start())}")
 
 
 class InvalidServiceError(Exception):
@@ -324,6 +324,7 @@ def handle_command(command: list):
         print(f"[{time_since_start()}] {Colour.CYAN}libc.sync(){Colour.RESET}")
         libc.sync()
         print("I have enjoyed running, goodnight.")
+        print(f"[{time_since_start()}] Kernel time: {float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
         libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_POWER_OFF, 0)
 
 

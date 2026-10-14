@@ -315,8 +315,7 @@ exec qemu-system-x86_64 \
     -kernel /boot/vmlinuz-linux \
     -initrd "$IMAGE" \
     -append "console=tty1 console=ttyS0 rdinit=/init loglevel=4" \
-    -display gtk \
-    -vga std \
+    -nographic \
     -serial mon:stdio \
     -cpu max \
     -no-reboot

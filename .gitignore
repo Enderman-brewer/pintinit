@@ -1,5 +1,6 @@
 venv/
 build/
 final_dist/
+build_ctl/
 fakefs/
 nuitka-crash-report.xml
