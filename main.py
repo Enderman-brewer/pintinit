@@ -10,10 +10,13 @@ import builtins
 import json
 import socket
 import ctypes
+import signal
 
 libc = ctypes.CDLL(None)
 service_list = {}
 failed_list = {}
+pid_to_service = {}   # pid -> service name, for children we started
+exit_status = {}      # service name -> exit code, None while running
 booted = False
 
 # Linux reboot magic constants
@@ -221,10 +224,26 @@ def eshell():
         print(f"Stupid unhandled exception, hey, now it's handled... I wonder...{Colour.GREEN} Can I make the kernel crash green?")
         sys.exit(1)
 
+def reap():
+    # As PID 1 we inherit every orphan on the system, so collect everything
+    # that has exited. Services get their exit code recorded; anything else
+    # is an orphan nobody else was going to clean up.
+    while True:
+        try:
+            pid, raw_status = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return  # no children left at all
+        if pid == 0:
+            return  # children exist, none have exited yet
+        name = pid_to_service.pop(pid, None)
+        if name is not None:
+            exit_status[name] = os.waitstatus_to_exitcode(raw_status)
+        else:
+            log(f"[{time_since_start()}] Reaped orphan {pid}, it's ours now, I guess")
+
 def get_service(service_name: str, allow_graceful_exit: bool = False) -> ServiceInfo:
-    process = service_list[service_name][0]
-    status = process.poll()
-    pid = process.pid
+    pid = service_list[service_name][0].pid
+    status = exit_status.get(service_name)
     if allow_graceful_exit and status == 0:
         crashed = False
     elif status is None:
@@ -252,7 +271,10 @@ def start_service(service_name: str, command: list[str], oneshot_game: bool = Fa
         return
     process = subprocess.Popen(command)
     service_list[service_name] = [process, oneshot_game, command]
+    pid_to_service[process.pid] = service_name
+    exit_status[service_name] = None
     time.sleep(0.5)
+    reap()
     status = get_service(service_name, allow_graceful_exit=oneshot_game)
     if status["crashed"]:
         # failed_list maps service name -> number of failed starts
@@ -271,18 +293,27 @@ def start_service(service_name: str, command: list[str], oneshot_game: bool = Fa
     
 def stop_service(service):
     global service_list
-    target_for_kill = service_list[service][0]
-    target_for_kill.terminate()
-    timer = 20
-    while timer:
-        if target_for_kill.poll() is None:
+    pid = service_list[service][0].pid
+    if exit_status.get(service) is None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        timer = 20
+        while timer and exit_status.get(service) is None:
+            reap()
             timer -= 1
             time.sleep(1)
-        else:
-            timer = 0
-    if target_for_kill.poll() is None:
-        target_for_kill.kill()
+    if exit_status.get(service) is None:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        while exit_status.get(service) is None:
+            reap()
+            time.sleep(0.1)
     service_list.pop(service)
+    exit_status.pop(service, None)
 
 def restart_service(service):
     _, oneshot, command = service_list[service]
@@ -374,6 +405,7 @@ server = setup_command_socket()
 booted = True
 
 while True:
+    reap()
     service_list_temp = dict(service_list)
     for i in service_list_temp:
         service_poll = get_service(i, allow_graceful_exit=service_list_temp[i][1])
