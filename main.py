@@ -323,6 +323,7 @@ def handle_command(command: list):
         stopping_all()
         print(f"[{time_since_start()}] All services have been shut down")
         print(f"[{time_since_start()}] {Colour.CYAN}libc.sync(){Colour.RESET}")
+        libc.sync()
         print("I have enjoyed running, goodnight.")
         libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_POWER_OFF, 0)
 
@@ -375,7 +376,7 @@ booted = True
 while True:
     service_list_temp = dict(service_list)
     for i in service_list_temp:
-        service_poll = get_service(i)
+        service_poll = get_service(i, allow_graceful_exit=service_list_temp[i][1])
         if service_poll["crashed"]:
             restart_service(service_poll["name"])
     for command in get_commands(server):
