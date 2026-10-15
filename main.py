@@ -367,12 +367,24 @@ def handle_command(command: list):
         print('Fuck death, I will jump in front of a van and survive owo')
         print(f"[{time_since_start()}] Kernel time: {float(time.clock_gettime(time.CLOCK_BOOTTIME))}")
         libc.syscall(169, _MAGIC1, _MAGIC2, _CMD_RESTART, 0)
+    elif command[0] == "session_hostname":
+        try:
+            hostname = command[1]
+        except:
+            return
+        session_hostname(hostname)
 
 
 class HostNameError(Exception):
     pass 
 
-
+def session_hostname(hostname):
+    libc.sethostname.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+    libc.sethostname.restype = ctypes.c_int
+    encoded = hostname.encode("utf-8")
+    if libc.sethostname(encoded, len(encoded)) != 0:
+        error = ctypes.get_errno()
+        log("We cannot do this :(")
 
 def boot():
     print(f"[{time_since_start()}] Starting services...")

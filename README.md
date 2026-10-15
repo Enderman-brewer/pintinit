@@ -54,6 +54,7 @@ Some of these features are incomplete. In particular, the command interface curr
 - [x] Suck
 - [x] Technically be usable
 - [x] Add more management
+- [x] Hostname management via settings
 
 ### ctl commands
 - [x] Shutdown
@@ -61,6 +62,7 @@ Some of these features are incomplete. In particular, the command interface curr
 - [ ] Start service
 - [ ] Restart service
 - [ ] Stop service
+- [x] Hostname management via cli
 
 ## Requirements
 
